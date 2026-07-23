@@ -171,9 +171,78 @@ The earlier EDA pass didn't surface ROI, only win/loss averages. If churned-trad
 Fee-as-%-of-notional is flat across all four tiers (0.0295%–0.0349%), with no tier standing out. So whatever is driving `activeLongTail`'s comparatively weak average win (175.9, lowest among the three "active-ish" tiers) and moderate win rate (51.0%) isn't fee drag. More likely candidates: gradually increasing leverage, worse entry timing, or position sizing that doesn't scale with edge — worth checking trends over time within this tier specifically.
 
 
-#### Churn investigation
+### Churn investigation
+#### Raw output
+| Direction | Count |
+|-----------|-------|
+| Open Long | 657,396 |
+| Close Long | 589,548 |
+| Open Short | 327,807 |
+| Close Short | 297,901 |
+| Buy | 111,523 |
+| Sell | 92,417 |
+| Short > Long | 3,158 |
+| Long > Short | 3,116 |
+| Merge Outcome | 872 |
+| Split Outcome | 188 |
+| Settlement | 139 |
+| Auto-Deleveraging | 79 |
+| Liquidated Isolated Long | 39 |
+| Liquidated Cross Long | 36 |
+| Liquidated Isolated Short | 1 |
+| Spot Dust Conversion | 1 |
 
+> **Name:** count, **dtype:** int64[pyarrow]
 
+---
+
+Fills Tagged as Liquidation-Related
+
+| statusTier | Count |
+|------------|-------|
+| activeCore | 46 |
+| activeLongTail | 15 |
+| churnedTrader | 13 |
+| silentHolder | 2 |
+
+> **dtype:** int64
+
+---
+
+Share of Total Loss Coming from the Single Worst Trade, by Tier
+
+| statusTier | count | mean | std | min | 25% | 50% | 75% | max |
+|------------|-------|------|-----|-----|-----|-----|-----|-----|
+| activeCore | 99.0 | 0.132764 | 0.180953 | 0.010328 | 0.034875 | 0.066010 | 0.114957 | 0.912984 |
+| activeLongTail | 80.0 | 0.078463 | 0.078153 | 0.003956 | 0.025820 | 0.047326 | 0.103089 | 0.414775 |
+| churnedTrader | 88.0 | 0.125616 | 0.197377 | 0.003066 | 0.030540 | 0.048300 | 0.114213 | 1.000000 |
+| silentHolder | 21.0 | 0.114061 | 0.216573 | 0.019299 | 0.037834 | 0.051722 | 0.075443 | 1.000000 |
+
+---
+
+Position Size Escalation Ratio (Last 20% Notional / First 20% Notional), by Tier
+
+| statusTier | count | mean | std | min | 25% | 50% | 75% | max |
+|------------|-------|------|-----|-----|-----|-----|-----|-----|
+| activeCore | 100.0 | 4.185927 | 17.844580 | 0.061412 | 0.648868 | 1.040201 | 1.832589 | 174.605318 |
+| activeLongTail | 80.0 | 1.566948 | 2.637714 | 0.151279 | 0.630691 | 1.020823 | 1.740387 | 23.310915 |
+| churnedTrader | 100.0 | 1.701443 | 2.971192 | 0.064355 | 0.666402 | 1.090121 | 1.662843 | 27.877815 |
+| silentHolder | 20.0 | 2.357716 | 2.872906 | 0.369117 | 0.745005 | 1.518627 | 2.330486 | 12.808838 |
+
+---
+
+Final Week Trading Intensity vs Overall Average, by Tier (>1 = Sped Up Before Going Quiet)
+
+| statusTier | count | mean | std | min | 25% | 50% | 75% | max |
+|------------|-------|------|-----|-----|-----|-----|-----|-----|
+| activeCore | 100.0 | 2.475545 | 4.192084 | 0.012809 | 0.424644 | 0.971255 | 2.651782 | 30.614408 |
+| activeLongTail | 80.0 | 2.031254 | 6.374289 | 0.025241 | 0.230584 | 0.558923 | 1.221223 | 46.580645 |
+| churnedTrader | 100.0 | 1.339681 | 2.188494 | 0.002910 | 0.204545 | 0.714286 | 1.235910 | 13.642000 |
+| silentHolder | 22.0 | 2.613073 | 4.872185 | 0.054206 | 0.467877 | 1.032121 | 2.779164 | 23.330499 |
+
+---
+
+#### Explanation
 1. Liquidation is not the churn driver
 Only 76 fills across the entire sample are liquidation/ADL-tagged (out of ~2.08M total fills), and they're not concentrated in `churnedTrader`:
 
@@ -222,7 +291,6 @@ Medians are all close to 1 (roughly stable sizing), but `activeCore`'s mean and 
 
 This is the clearest finding of this round. `churnedTrader`'s median is 0.714 — **below 1**, meaning the typical churned account was trading *less* than its own historical average in its final week, not ramping up into a blowup. `churnedTrader` also has the lowest mean of any tier. Combined with the low liquidation rate, this points toward a **gradual wind-down / fading disengagement** pattern rather than a sudden forced exit.
 
-## Revised interpretation
 The "picking up pennies in front of a steamroller" story from the last round doesn't hold up:
 - Liquidations are rare overall and not concentrated in `churnedTrader`.
 - Tail-loss concentration is similar across tiers.
@@ -231,3 +299,79 @@ The "picking up pennies in front of a steamroller" story from the last round doe
 
 The more consistent story now is **gradual disengagement**: churned traders taper off trading intensity over time and eventually stop, rather than getting wiped out in a single event. What's still unexplained is *why* — worth checking PnL trend over the account's lifetime (declining edge? losing streak without a single catastrophic trade?) and whether tapering correlates with rising loss rate rather than one big loss.
 
+### pnl investigation
+#### Raw output
+| Direction | Count |
+|-----------|-------|
+| Open Long | 657,396 |
+| Close Long | 589,548 |
+| Open Short | 327,807 |
+| Close Short | 297,901 |
+| Buy | 111,523 |
+| Sell | 92,417 |
+| Short > Long | 3,158 |
+| Long > Short | 3,116 |
+| Merge Outcome | 872 |
+| Split Outcome | 188 |
+| Settlement | 139 |
+| Auto-Deleveraging | 79 |
+| Liquidated Isolated Long | 39 |
+| Liquidated Cross Long | 36 |
+| Liquidated Isolated Short | 1 |
+| Spot Dust Conversion | 1 |
+
+> Name: count, dtype: int64[pyarrow]
+
+---
+
+Fills Tagged as Liquidation-Related
+-----------------------------------
+
+| statusTier | Count |
+|------------|-------|
+| activeCore | 46 |
+| activeLongTail | 15 |
+| churnedTrader | 13 |
+| silentHolder | 2 |
+
+> dtype: int64
+
+---
+
+Share of Total Loss Coming from the Single Worst Trade, by Tier
+---------------------------------------------------------------
+
+| statusTier | count | mean | std | min | 25% | 50% | 75% | max |
+|------------|-------|------|-----|-----|-----|-----|-----|-----|
+| activeCore | 99.0 | 0.132764 | 0.180953 | 0.010328 | 0.034875 | 0.066010 | 0.114957 | 0.912984 |
+| activeLongTail | 80.0 | 0.078463 | 0.078153 | 0.003956 | 0.025820 | 0.047326 | 0.103089 | 0.414775 |
+| churnedTrader | 88.0 | 0.125616 | 0.197377 | 0.003066 | 0.030540 | 0.048300 | 0.114213 | 1.000000 |
+| silentHolder | 21.0 | 0.114061 | 0.216573 | 0.019299 | 0.037834 | 0.051722 | 0.075443 | 1.000000 |
+
+---
+
+Position Size Escalation Ratio (Last 20% Notional / First 20% Notional), by Tier
+--------------------------------------------------------------------------------
+
+| statusTier | count | mean | std | min | 25% | 50% | 75% | max |
+|------------|-------|------|-----|-----|-----|-----|-----|-----|
+| activeCore | 100.0 | 4.185927 | 17.844580 | 0.061412 | 0.648868 | 1.040201 | 1.832589 | 174.605318 |
+| activeLongTail | 80.0 | 1.566948 | 2.637714 | 0.151279 | 0.630691 | 1.020823 | 1.740387 | 23.310915 |
+| churnedTrader | 100.0 | 1.701443 | 2.971192 | 0.064355 | 0.666402 | 1.090121 | 1.662843 | 27.877815 |
+| silentHolder | 20.0 | 2.357716 | 2.872906 | 0.369117 | 0.745005 | 1.518627 | 2.330486 | 12.808838 |
+
+---
+
+Final Week Trading Intensity vs Overall Average, by Tier (>1 = Sped Up Before Going Quiet)
+------------------------------------------------------------------------------------------
+
+| statusTier | count | mean | std | min | 25% | 50% | 75% | max |
+|------------|-------|------|-----|-----|-----|-----|-----|-----|
+| activeCore | 100.0 | 2.475545 | 4.192084 | 0.012809 | 0.424644 | 0.971255 | 2.651782 | 30.614408 |
+| activeLongTail | 80.0 | 2.031254 | 6.374289 | 0.025241 | 0.230584 | 0.558923 | 1.221223 | 46.580645 |
+| churnedTrader | 100.0 | 1.339681 | 2.188494 | 0.002910 | 0.204545 | 0.714286 | 1.235910 | 13.642000 |
+| silentHolder | 22.0 | 2.613073 | 4.872185 | 0.054206 | 0.467877 | 1.032121 | 2.779164 | 23.330499 |
+
+---
+
+#### Explanation
