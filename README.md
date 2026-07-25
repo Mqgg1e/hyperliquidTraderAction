@@ -375,3 +375,42 @@ Final Week Trading Intensity vs Overall Average, by Tier (>1 = Sped Up Before Go
 ---
 
 #### Explanation
+1. Liquidation is still not the main churn mechanism
+
+The latest output repeats the liquidation-related summary, and the core signal remains unchanged: liquidation-tagged fills are rare overall and are not concentrated in `churnedTrader`. `activeCore` has 46 liquidation-related fills, while `churnedTrader` has only 13. This means the churned group is not primarily disappearing because of forced liquidation events.
+
+This directly weakens the earlier “single blow-up / steamroller” interpretation. If churn were mainly caused by liquidations, `churnedTrader` should be the tier with the clearest liquidation concentration, but the output shows the opposite.
+
+2. Worst-loss concentration does not uniquely identify churned traders
+
+The share of total loss coming from the single worst trade is close across tiers on the median: `activeCore` is 0.066, `activeLongTail` is 0.047, `churnedTrader` is 0.048, and `silentHolder` is 0.052. `churnedTrader` does have a max value of 1.000, so there are individual accounts where one trade explains all observed losses, but the median shows that this is not the typical churned-trader pattern.
+
+The practical interpretation is that churn is not mostly explained by one catastrophic losing trade. Tail-loss cases exist, but they are outliers rather than the defining behavior of the churned tier.
+
+3. Position-size escalation is modest for the median churned trader
+
+The last-20%-vs-first-20% notional ratio is also not unusually high for `churnedTrader`. Its median is 1.090, only slightly above stable sizing. `activeCore` has a similar median at 1.040 but a much larger mean and max, including a max escalation ratio of 174.605.
+
+That means the data does not support a broad “churned traders keep increasing size until they break” story. If anything, the most extreme escalation behavior appears inside `activeCore`, yet those accounts remain active. So size escalation alone cannot explain churn.
+
+4. Final-week intensity is the strongest behavioral signal
+
+The clearest result is final-week trading intensity. `churnedTrader` has a median final-week intensity of 0.714, below 1, meaning the typical churned account traded less in its final week than its own historical average. It also has the lowest mean final-week intensity among the four tiers.
+
+This points toward a gradual wind-down rather than a sudden collapse. Churned traders are not generally accelerating into a final blow-up; they are slowing down before going quiet.
+
+5. Updated interpretation: gradual disengagement, not forced exit
+
+Putting the three mechanism checks together:
+- liquidation events are rare and not concentrated in `churnedTrader`;
+- worst-loss concentration is similar across tiers;
+- median position escalation is modest for `churnedTrader`;
+- final-week intensity is below the account's historical average.
+
+The best current explanation is therefore **gradual disengagement**. `churnedTrader` accounts likely reduce activity over time and eventually stop, rather than being forced out by liquidation or a single dominant tail-loss event.
+
+6. What remains unresolved
+
+This output is strong for rejecting the blow-up hypothesis, but it does not yet explain why disengagement happens. The next analysis should focus on late-life PnL trajectory: whether win rate declines, whether average PnL per closed trade compresses, and whether the final phase contains many small losses rather than one large loss.
+
+A useful next step is to run the lifetime-quintile PnL analysis separately and append its raw output as a new section, without modifying the existing raw tables.
