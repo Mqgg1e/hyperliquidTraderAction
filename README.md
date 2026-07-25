@@ -375,3 +375,137 @@ Final Week Trading Intensity vs Overall Average, by Tier (>1 = Sped Up Before Go
 ---
 
 #### Explanation
+1. Liquidation is still not the main churn mechanism
+
+The latest output repeats the liquidation-related summary, and the core signal remains unchanged: liquidation-tagged fills are rare overall and are not concentrated in `churnedTrader`. `activeCore` has 46 liquidation-related fills, while `churnedTrader` has only 13. This means the churned group is not primarily disappearing because of forced liquidation events.
+
+This directly weakens the earlier “single blow-up / steamroller” interpretation. If churn were mainly caused by liquidations, `churnedTrader` should be the tier with the clearest liquidation concentration, but the output shows the opposite.
+
+2. Worst-loss concentration does not uniquely identify churned traders
+
+The share of total loss coming from the single worst trade is close across tiers on the median: `activeCore` is 0.066, `activeLongTail` is 0.047, `churnedTrader` is 0.048, and `silentHolder` is 0.052. `churnedTrader` does have a max value of 1.000, so there are individual accounts where one trade explains all observed losses, but the median shows that this is not the typical churned-trader pattern.
+
+The practical interpretation is that churn is not mostly explained by one catastrophic losing trade. Tail-loss cases exist, but they are outliers rather than the defining behavior of the churned tier.
+
+3. Position-size escalation is modest for the median churned trader
+
+The last-20%-vs-first-20% notional ratio is also not unusually high for `churnedTrader`. Its median is 1.090, only slightly above stable sizing. `activeCore` has a similar median at 1.040 but a much larger mean and max, including a max escalation ratio of 174.605.
+
+That means the data does not support a broad “churned traders keep increasing size until they break” story. If anything, the most extreme escalation behavior appears inside `activeCore`, yet those accounts remain active. So size escalation alone cannot explain churn.
+
+4. Final-week intensity is the strongest behavioral signal
+
+The clearest result is final-week trading intensity. `churnedTrader` has a median final-week intensity of 0.714, below 1, meaning the typical churned account traded less in its final week than its own historical average. It also has the lowest mean final-week intensity among the four tiers.
+
+This points toward a gradual wind-down rather than a sudden collapse. Churned traders are not generally accelerating into a final blow-up; they are slowing down before going quiet.
+
+5. Updated interpretation: gradual disengagement, not forced exit
+
+Putting the three mechanism checks together:
+- liquidation events are rare and not concentrated in `churnedTrader`;
+- worst-loss concentration is similar across tiers;
+- median position escalation is modest for `churnedTrader`;
+- final-week intensity is below the account's historical average.
+
+The best current explanation is therefore **gradual disengagement**. `churnedTrader` accounts likely reduce activity over time and eventually stop, rather than being forced out by liquidation or a single dominant tail-loss event.
+
+6. What remains unresolved
+
+This output is strong for rejecting the blow-up hypothesis, but it does not yet explain why disengagement happens. The next analysis should focus on late-life PnL trajectory: whether win rate declines, whether average PnL per closed trade compresses, and whether the final phase contains many small losses rather than one large loss.
+
+A useful next step is to run the lifetime-quintile PnL analysis separately and append its raw output as a new section, without modifying the existing raw tables.
+
+### Layer 1 behavior analysis
+#### Raw output
+Address-level behavior summary by statusTier (median values):
+
+| statusTier | fillCount | activeDays | activeMonths | fillsPerActiveDay | totalNotional | realizedPnl | winRate | daysSinceLastFill |
+|------------|----------:|-----------:|-------------:|------------------:|--------------:|------------:|--------:|------------------:|
+| activeCore | 9,962.0 | 44.5 | 6.0 | 98.843 | 21,318,460 | -1,463.670 | 0.523 | 87.0 |
+| activeLongTail | 9,982.0 | 38.0 | 3.0 | 147.595 | 10,052,360 | 207.477 | 0.507 | 36.5 |
+| churnedTrader | 8,589.5 | 9.0 | 2.0 | 521.908 | 49,878,530 | 37,432.771 | 0.531 | 296.0 |
+| silentHolder | 7,130.0 | 71.0 | 7.0 | 76.932 | 21,388,980 | 19,658.359 | 0.468 | 129.5 |
+
+---
+
+Pareto concentration by statusTier:
+
+| statusTier | top10pctNotionalShare | top20pctNotionalShare | top10pctFillShare | top20pctFillShare |
+|------------|----------------------:|----------------------:|------------------:|------------------:|
+| activeCore | 0.463 | 0.696 | 0.142 | 0.284 |
+| activeLongTail | 0.459 | 0.710 | 0.138 | 0.275 |
+| churnedTrader | 0.344 | 0.563 | 0.151 | 0.301 |
+| silentHolder | 0.512 | 0.620 | 0.221 | 0.368 |
+
+---
+
+Fill-count funnel by statusTier (share of sampled addresses):
+
+| statusTier | addresses | fillsGte1 | fillsGte10 | fillsGte100 | fillsGte1000 | fillsGte5000 | fillsGte10000 |
+|------------|----------:|----------:|-----------:|------------:|-------------:|-------------:|--------------:|
+| activeCore | 100 | 1.000 | 1.000 | 0.940 | 0.820 | 0.690 | 0.200 |
+| activeLongTail | 80 | 1.000 | 1.000 | 1.000 | 1.000 | 0.662 | 0.212 |
+| churnedTrader | 100 | 1.000 | 1.000 | 0.990 | 0.930 | 0.640 | 0.280 |
+| silentHolder | 22 | 1.000 | 0.909 | 0.909 | 0.909 | 0.591 | 0.091 |
+
+---
+
+Average cohort retention by statusTier:
+
+| statusTier | m1Retention | m3Retention | m6Retention |
+|------------|------------:|------------:|------------:|
+| activeCore | 0.837 | 0.753 | 0.638 |
+| activeLongTail | 0.785 | 0.522 | 0.567 |
+| churnedTrader | 0.639 | 0.362 | 0.261 |
+| silentHolder | 0.964 | 0.955 | 0.963 |
+
+---
+
+#### Explanation
+1. Layer 1 confirms that churn is mostly a retention problem, not a historical-activity problem
+
+The fill-count funnel shows `churnedTrader` accounts were not low-information accounts. In the sampled fills, 99.0% have at least 100 fills, 93.0% have at least 1,000 fills, 64.0% have at least 5,000 fills, and 28.0% hit the 10,000-fill cap. This means the churned group contains historically active traders, not random inactive wallets.
+
+The key difference is not whether they ever traded, but whether their activity persisted. Median `daysSinceLastFill` is 296 days for `churnedTrader`, far above `activeCore` at 87 days and `activeLongTail` at 36.5 days.
+
+2. Churned traders trade in compressed, intense bursts
+
+`churnedTrader` has the highest median fills per active day at 521.908, compared with 98.843 for `activeCore`, 147.595 for `activeLongTail`, and 76.932 for `silentHolder`. But it has only 9 median active days and 2 median active months.
+
+This is an important behavioral signature: churned accounts are not simply low-frequency users. They are high-intensity users over a short active window, then they disappear. That supports a “burst-and-fade” lifecycle rather than a slow, stable participation pattern.
+
+3. ActiveCore is broader and more durable; activeLongTail is recent but narrower
+
+`activeCore` has 44.5 median active days and 6 median active months, making it a more durable trading segment. `activeLongTail` is more recent, with only 36.5 median days since last fill, but its median activeMonths is only 3. This makes `activeLongTail` look like a currently active but less established group.
+
+The distinction matters for product interpretation: `activeLongTail` may not be churned yet, but it may be the segment most at risk of becoming churned if its short active history fails to extend.
+
+4. SilentHolder behaves differently from churnedTrader
+
+`silentHolder` has the highest median activeMonths at 7 and strong cohort retention proxies, but a lower win rate. This is consistent with the earlier label: these accounts do not look like bursty churned traders. They look more like accounts with longer observed participation windows that eventually became quiet while still retaining account value.
+
+Because only 22 `silentHolder` addresses have fills in this sample, this segment should still be interpreted cautiously.
+
+5. Pareto concentration shows different concentration shapes by tier
+
+The top 10% of `activeCore` addresses contribute 46.3% of notional, and the top 10% of `activeLongTail` contribute 45.9%. `silentHolder` is even more concentrated at 51.2%. By contrast, `churnedTrader` is less concentrated by notional at 34.4% for the top 10%.
+
+This suggests the churned segment's high activity is less dependent on only a few whale-like accounts. It is more broadly distributed across the sampled churned users, which strengthens the interpretation that churn is a segment-level behavior rather than a single-outlier artifact.
+
+6. Cohort retention is the strongest Layer 1 validation signal
+
+Average cohort retention falls fastest for `churnedTrader`: m1 retention is 0.639, m3 retention is 0.362, and m6 retention is 0.261. `activeCore` retains much better at m6 with 0.638, while `silentHolder` remains near 0.963.
+
+This directly validates the original Layer 1 goal: the four status tiers do correspond to different behavior patterns in the fill history. `churnedTrader` is not merely defined by current account value; it also shows materially weaker observed retention in trading activity.
+
+### Layer 1 conclusion
+
+Layer 1 supports the lifecycle story from the original plan:
+- `activeCore`: durable, broad active history and better retention;
+- `activeLongTail`: currently recent, but with a shorter observed activity history;
+- `churnedTrader`: historically active, high-intensity, short-window traders with poor cohort retention;
+- `silentHolder`: longer observed participation and high retention proxy, but now quiet and limited by small fill-observed sample size.
+
+The next step is Layer 2 feature engineering and clustering. The address-level behavior table saved by this pass can be used directly as the base feature matrix, then combined with the existing `statusTier` labels to check whether unsupervised clusters rediscover the same lifecycle structure or reveal a new segmentation axis.
+
+Note: the Layer 1 parquet tables are generated artifacts. Re-run `uv run python python/layer1BehaviorAnalysis.py` locally to recreate them; they are intentionally not tracked in git so PRs remain text-only.
