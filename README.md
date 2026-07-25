@@ -509,3 +509,36 @@ Layer 1 supports the lifecycle story from the original plan:
 The next step is Layer 2 feature engineering and clustering. The address-level behavior table saved by this pass can be used directly as the base feature matrix, then combined with the existing `statusTier` labels to check whether unsupervised clusters rediscover the same lifecycle structure or reveal a new segmentation axis.
 
 Note: the Layer 1 parquet tables are generated artifacts. Re-run `uv run python python/layer1BehaviorAnalysis.py` locally to recreate them; they are intentionally not tracked in git so PRs remain text-only.
+
+Capped-address correction (supersedes the raw activeSpanDays / cohort-retention numbers above)
+
+Why: userFillsByTime only ever returns the 10,000 most recent fills per address (server-side hard cap). For any address that hits this cap, firstFill in our data is just "earliest fill inside the most-recent-10k window," not the address's true trading start. activeSpanDays, activeMonths, and cohortMonth (and therefore cohort retention) are unreliable for these addresses. lastFill-derived metrics (daysSinceLastFill, final-week intensity, etc.) are unaffected and do not need correction.
+
+Capped-address share by statusTier
+statusTier	addresses	cappedCount	cappedShare
+activeCore	100	20	0.200
+activeLongTail	80	17	0.212
+churnedTrader	100	28	0.280
+silentHolder	22	2	0.091
+
+(This matches the fillsGte10000 column already in the fill-count funnel table above — 67/302 addresses overall, 22.2%.)
+
+Active span (days), full sample vs. non-capped-only
+statusTier	Full-sample median	Non-capped-only median	Non-capped n
+activeCore	202.5	293.5	80
+activeLongTail	65.5	136.0	63
+churnedTrader	14.0	15.0	72
+silentHolder	226.5	245.5	20
+
+activeCore and activeLongTail were both understated by the cap — true active windows are roughly 45% and 108% longer than the raw numbers suggested. churnedTrader's 14 → 15 day median is effectively unchanged, which independently confirms the burst-and-fade conclusion was not a capped-address artifact.
+
+Cohort retention, corrected (cohortMonth re-derived from non-capped addresses only)
+statusTier	m1Retention	m3Retention	m6Retention	Non-capped n
+activeCore	0.888	0.797	0.701	80
+activeLongTail	0.857	0.584	0.616	63
+churnedTrader	0.660	0.494	0.388	72
+silentHolder	0.962	0.955	0.963	20
+
+Direction of the lifecycle story is unchanged (churnedTrader still retains worst, silentHolder best), but every tier's retention is higher once capped addresses are excluded from cohort assignment — the original table understated retention across the board, not just for the tiers with the largest span correction.
+
+Caveat to carry forward: 85 of 94 non-capped cohort-month buckets contain fewer than 5 addresses. Treat the m3/m6 corrected retention numbers as directionally suggestive, not statistically precise — this is the same small-sample-decay caveat already listed in the "Known Data/Methodology Caveats" section.
