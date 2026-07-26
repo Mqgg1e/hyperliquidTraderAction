@@ -542,3 +542,47 @@ silentHolder	0.962	0.955	0.963	20
 Direction of the lifecycle story is unchanged (churnedTrader still retains worst, silentHolder best), but every tier's retention is higher once capped addresses are excluded from cohort assignment — the original table understated retention across the board, not just for the tiers with the largest span correction.
 
 Caveat to carry forward: 85 of 94 non-capped cohort-month buckets contain fewer than 5 addresses. Treat the m3/m6 corrected retention numbers as directionally suggestive, not statistically precise — this is the same small-sample-decay caveat already listed in the "Known Data/Methodology Caveats" section.
+
+
+### churned trader edge decline by month bucket
+Churn edge-decline check (address-relative month bucket, share-profitable metric)
+
+Answers the open Layer 1 (3.3) question — does trading edge decline as churnedTrader approaches disengagement? Earlier attempts (trade-count quintiles, calendar-month alignment, PnL magnitude) were outlier-dominated and inconclusive. This pass fixes both issues: buckets are aligned to each address's own lastFill (monthsBeforeLastFill = 0 is the month containing the address's last fill), and the primary metric is shareNetProfitable (share of addresses net-profitable that month), which is robust to the whale-skew flagged in caveat #2.
+
+Raw output
+
+Share of accounts net-profitable, by statusTier x monthsBeforeLastFill (0 = closest to disengagement):
+
+statusTier	0	1	2	3
+activeCore	0.516	0.397	0.452	0.549
+activeLongTail	0.423	0.509	0.525	0.533
+churnedTrader	0.531	0.375	0.577	0.471
+silentHolder	0.300	0.625	0.667	0.467
+
+Sample size (n addresses) per cell — all cells clear the n ≥ 10 reliability threshold:
+
+statusTier	0	1	2	3
+activeCore	91	78	62	51
+activeLongTail	78	55	40	30
+churnedTrader	98	48	26	17
+silentHolder	20	16	12	15
+
+Linear slope of shareNetProfitable vs. monthsBeforeLastFill (positive = edge was better further from the last fill, i.e. edge declined toward disengagement):
+
+statusTier	slope	reliable buckets
+activeCore	0.0152	4
+activeLongTail	0.0347	4
+churnedTrader	0.0022	4
+silentHolder	0.0542	4
+
+Every netPnl-magnitude cell has a mean/median ratio in the tens-to-thousands (whale skew), confirming shareNetProfitable — not PnL magnitude — has to be the metric of record here, per caveat #2.
+
+Explanation
+
+churnedTrader's slope (0.0022) is effectively flat, and the four buckets aren't monotonic (0.531 → 0.375 → 0.577 → 0.471): there's no clean, directional edge decline as these accounts approach their last fill, even after fixing the calendar-alignment and outlier-magnitude problems that undermined the earlier attempts. Win rate shows the same noisy, non-monotonic pattern.
+
+This resolves the open 3.3 question, but not in the direction originally assumed: churn is not preceded by an edge decline. Combined with the earlier finding that churnedTrader's final-week intensity tapers off rather than spiking (Section "Updated interpretation: gradual disengagement, not forced exit"), the fuller picture is that churn looks like disengagement driven by declining activity/attention, not by declining trading performance. These accounts don't appear to be "losing their edge and quitting" — they look like they're quitting (for reasons outside what's observable in fills — position sizing, external liquidity needs, competing platforms, etc.) while trading performance stays roughly where it always was.
+
+activeLongTail (slope 0.0347) and silentHolder (slope 0.0542) show mildly larger positive slopes than churnedTrader, i.e. some tendency toward weaker near-term performance in those tiers — worth keeping in mind for the activeLongTail underperformance follow-up (Plan item 3), but neither slope is large enough on this sample size to treat as conclusive on its own.
+
+Caveat carried forward: churnedTrader's n drops from 98 (bucket 0) to 17 (bucket 3) — still above the n ≥ 10 floor, but the bucket-3 estimate is the least stable of the four and shouldn't be over-weighted in the trend read.
