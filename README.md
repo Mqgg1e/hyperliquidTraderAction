@@ -586,3 +586,35 @@ This resolves the open 3.3 question, but not in the direction originally assumed
 activeLongTail (slope 0.0347) and silentHolder (slope 0.0542) show mildly larger positive slopes than churnedTrader, i.e. some tendency toward weaker near-term performance in those tiers — worth keeping in mind for the activeLongTail underperformance follow-up (Plan item 3), but neither slope is large enough on this sample size to treat as conclusive on its own.
 
 Caveat carried forward: churnedTrader's n drops from 98 (bucket 0) to 17 (bucket 3) — still above the n ≥ 10 floor, but the bucket-3 estimate is the least stable of the four and shouldn't be over-weighted in the trend read.
+
+### Why active long tail underperformance
+
+activeLongTail underperformance: leverage/sizing and execution style (not fee-driven, confirmed cause)
+
+Follow-up on the flagged-but-unexamined puzzle: activeLongTail has a weak avgWin, a moderate winRate, and fee burden is already ruled out (flat ~0.03% of notional across tiers). Checked the two remaining candidates from the plan: position sizing relative to account equity, and entry timing/execution quality (taker vs. maker).
+
+Note on the leverage proxy: accountValue in the fills table is a single leaderboard snapshot per address, not a point-in-time series, so notional / accountValue is a directional sizing-relative-to-equity proxy, not an exact leverage ratio. churnedTrader's current accountValue is often ~$0 (post-churn drawdown), which makes its ratio unreliable — excluded from the conclusion below for that reason.
+
+Position sizing and execution style, by statusTier (medians)
+statusTier	medianNotional / accountValue	takerShareAllFills	takerShareEntries	winRate	avgWin	avgLoss
+activeCore	0.0031	0.817	0.883	0.523	144.10	-151.40
+activeLongTail	0.2787	0.922	0.938	0.507	55.18	-51.48
+
+Robustness check, restricted to addresses with accountValue > 1000 (n=100 activeCore, n=47 activeLongTail — still excludes the noisiest near-zero-equity denominators): activeCore 0.0031 vs activeLongTail 0.0760 — the ratio narrows but activeLongTail is still roughly 24x activeCore on this metric.
+
+Realized PnL per closed fill, by execution type (crossed=True = taker/aggressive, crossed=False = maker/passive)
+statusTier	crossed	medianPnl	n	winRate
+activeCore	False (maker)	0.519	90,395	0.644
+activeCore	True (taker)	0.010	247,531	0.506
+activeLongTail	False (maker)	0.381	65,291	0.715
+activeLongTail	True (taker)	-0.039	215,455	0.447
+Conclusion
+
+Two compounding, non-fee mechanisms explain the underperformance:
+
+Position sizing relative to equity is far more aggressive. activeLongTail's median per-trade notional is roughly 24-90x their account value's share compared to activeCore (depending on whether the noisiest low-equity addresses are excluded), for accounts that are already far smaller in absolute equity (median accountValue ~$2,325 vs. ~$193,211). Same-tier bad trades therefore do proportionally more account damage.
+Heavier reliance on aggressive (taker) execution, and it performs worse for this tier specifically. activeLongTail takes liquidity on 92.2% of fills vs. 81.7% for activeCore (93.8% vs. 88.3% on entries specifically). When they do take liquidity, their win rate (0.447) is worse than activeCore's taker win rate (0.506) — the execution-quality gap isn't just "more taker trades," it's "taker trades that go worse for this tier." Maker-side win rates are actually stronger for activeLongTail (0.715 vs. 0.644), so the underperformance is concentrated specifically in the taker/aggressive-execution side of their activity, not a blanket skill gap.
+
+Net effect: smaller accounts, sized more aggressively relative to their own equity, executed more often via aggressive orders that convert into losses more often than activeCore's aggressive orders do — a sizing + execution-timing story, independent of the already-ruled-out fee explanation.
+
+Caveat carried forward: the leverage proxy uses a single accountValue snapshot per address rather than point-in-time equity, so treat the exact multiple (24x-90x) as directional, not precise; the qualitative gap held up under the accountValue > 1000 robustness check.
