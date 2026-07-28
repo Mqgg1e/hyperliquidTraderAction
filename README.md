@@ -638,3 +638,47 @@ The original Layer 1 conclusion (line ~501) was written before the capped-addres
 **Carried-forward caveats for Layer 2:** exclude `firstFill`-derived features for capped addresses (or engineer them separately) when building the clustering feature matrix; treat `churnedTrader`'s `accountValue`-based features as unreliable (near-zero post-churn snapshots); flag any cohort/month-bucket feature built on cells with n < 10.
 
 Next: Layer 2 feature engineering and clustering (Plan item 5-6) — build the feature matrix from the corrected `addressBehaviorFeatures.parquet` plus `cappedAddressFlags.parquet` and `leverageAndExecutionByAddress.parquet`, then run k-means/HDBSCAN to check whether clusters rediscover the four `statusTier` labels or reveal a new axis (e.g. fast-decay vs. slow-decay within `churnedTrader`).
+
+
+### Layer 2 
+Layer 2: feature engineering + clustering
+
+Feature matrix design. Built from leverageAndExecutionByAddress.parquet (302 addresses), carrying forward the two Layer 1 caveats: no firstFill-derived features (activeSpanDays, activeMonths, activeDays) since those are unreliable for the 67/302 capped addresses, and no accountValue-derived features (accountValue, medianNotionalOverAccountValue) since churnedTrader's current equity is frequently a near-zero post-churn snapshot. isCapped is carried alongside the matrix for diagnostics only, not used as a clustering feature.
+
+12 features used (log-transformed where heavy-tailed, then standardized): fillCount, totalNotional, fillsPerActiveDay, notionalPerActiveDay, feeAsPctOfNotional, winRate, avgWin, avgLoss, closedTradeShare, daysSinceLastFill, takerShareAllFills, takerShareEntries. A small number of addresses (3-14 of 302) with no closed trades or no entry fills were imputed with their own tier's median before scaling.
+
+Raw output
+
+Silhouette score by k (KMeans): k=2 → 0.222, k=3 → 0.227, k=4 → 0.204, k=5 → 0.205, k=6 → 0.202, k=7 → 0.161. The k=4 solution (matched to statusTier count) is not the best-supported number of clusters in this feature space — k=3 edges it out, and the differences across k=2..6 are all small.
+
+KMeans (k=4) vs statusTier, adjusted Rand index: 0.079. HDBSCAN (min_cluster_size=15) found only 2 clusters and labeled 74.8% of addresses as noise; ARI vs statusTier: 0.010.
+
+KMeans cluster profile (medians):
+
+cluster	n	dominant tier mix	fillsPerActiveDay	daysSinceLastFill	winRate	avgWin	avgLoss	takerShareAllFills	notionalPerActiveDay
+0	2	outliers (mixed)	110.3	330	0.38	1.91	-2.03	0.85	11,348
+1	108	activeCore 47 / activeLongTail 36 / churnedTrader 11 / silentHolder 14	32.8	16.5	0.50	49.2	-43.4	0.94	86,775
+2	127	churnedTrader 66 / activeLongTail 29 / activeCore 28 / silentHolder 4	600.0	305	0.50	144.1	-136.0	0.97	7,257,971
+3	65	activeCore 24 / churnedTrader 23 / activeLongTail 14 / silentHolder 4	270.2	178	0.61	138.4	-155.5	0.37	1,722,661
+Explanation
+
+Clustering does not rediscover the four statusTier labels (ARI ≈ 0.08 for KMeans, ≈ 0.01 for HDBSCAN — both close to the 0 expected under random labeling). This isn't a modeling failure — it's a real finding: statusTier is built from account state (accountValue scale, recency of activity), while this feature matrix captures trading style (intensity, execution aggressiveness, edge). The two axes are close to orthogonal. Every cluster except the 2-address outlier group is a mix of 3-4 status tiers.
+
+Reading the cluster profiles, the natural axis this feature space finds is closer to trading style/scale, cutting across status:
+
+Cluster 1 ("small/casual", n=108): low intensity, small notional, near-maker-neutral execution, still recently active. Mostly activeCore/activeLongTail but includes 11 churnedTrader and 14 silentHolder.
+Cluster 2 ("high-volume aggressive", n=127): very high intensity (600 fills/active day), almost entirely taker (0.97), large notional scale, and not recently active (median 305 days since last fill). Dominant churnedTrader, but nearly as many activeCore+activeLongTail combined (57) — this looks like a "burst hard, then go quiet or slow down" trading style rather than a churn-specific one.
+Cluster 3 ("patient/skilled scale", n=65): best win rate (0.61) of any cluster, most maker-heavy execution (takerShare 0.37, the inverse of cluster 2), large notional. Roughly evenly split across activeCore, churnedTrader, and activeLongTail.
+Cluster 0: 2-address outlier group, not interpretable as a real segment.
+
+HDBSCAN's low cluster count and high noise share (74.8%) independently confirms there's no tight, well-separated grouping in this feature space — the underlying structure is closer to a continuum of trading styles than discrete segments, and silhouette scores across all k (0.16-0.23) are modest, consistent with soft/overlapping structure rather than sharply separated clusters.
+
+Within churnedTrader only — re-clustered on intensity/recency/edge/execution features (k=2, silhouette 0.176; k=3 was marginally higher at 0.213 but 2 was chosen for interpretability):
+
+subCluster	n	fillsPerActiveDay	daysSinceLastFill	winRate	avgWin	avgLoss	takerShareAllFills
+0	55	753.0	340	0.66	415.5	-169.1	0.73
+1	45	407.5	241	0.37	79.0	-54.3	1.00
+
+This wasn't the "fast-decay vs. slow-decay" split originally hypothesized (both sub-clusters had similar activeSpanDays in the underlying data, and daysSinceLastFill — the recency axis — doesn't separate them cleanly either). What actually separates them is trading quality/style: sub-cluster 0 is higher-intensity, better win rate, larger average win, and more maker-heavy; sub-cluster 1 is lower-intensity, weaker win rate (0.37, the worst of any group in this analysis), and 100% taker. In plain terms: churnedTrader splits into a "quit while performing reasonably well" group and a "quit while performing poorly, executing purely as a taker" group — closer to the activeLongTail mechanism found earlier (taker-heavy execution correlating with worse edge) than to a decay-speed axis.
+
+Caveats: silhouette scores throughout are modest (0.16-0.23), so treat cluster boundaries as descriptive, not as evidence of hard, naturally-separated groups. The churnedTrader sub-clustering "quit while poor / pure taker" group (sub-cluster 1, n=45) echoes the activeLongTail underperformance mechanism (Section "Why active long tail underperformance") closely enough that it's worth checking directly whether that group overlaps with addresses that were also activeLongTail-like earlier in their lifetime — flagged as a follow-up, not yet checked.
