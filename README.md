@@ -682,3 +682,38 @@ subCluster	n	fillsPerActiveDay	daysSinceLastFill	winRate	avgWin	avgLoss	takerSha
 This wasn't the "fast-decay vs. slow-decay" split originally hypothesized (both sub-clusters had similar activeSpanDays in the underlying data, and daysSinceLastFill — the recency axis — doesn't separate them cleanly either). What actually separates them is trading quality/style: sub-cluster 0 is higher-intensity, better win rate, larger average win, and more maker-heavy; sub-cluster 1 is lower-intensity, weaker win rate (0.37, the worst of any group in this analysis), and 100% taker. In plain terms: churnedTrader splits into a "quit while performing reasonably well" group and a "quit while performing poorly, executing purely as a taker" group — closer to the activeLongTail mechanism found earlier (taker-heavy execution correlating with worse edge) than to a decay-speed axis.
 
 Caveats: silhouette scores throughout are modest (0.16-0.23), so treat cluster boundaries as descriptive, not as evidence of hard, naturally-separated groups. The churnedTrader sub-clustering "quit while poor / pure taker" group (sub-cluster 1, n=45) echoes the activeLongTail underperformance mechanism (Section "Why active long tail underperformance") closely enough that it's worth checking directly whether that group overlaps with addresses that were also activeLongTail-like earlier in their lifetime — flagged as a follow-up, not yet checked.
+
+
+#### Churned subcluster mechanism
+
+Follow-up: does churnedTrader's weaker sub-cluster share the activeLongTail mechanism?
+
+Flagged in the Layer 2 section above. Since statusTier is a mutually exclusive assignment, no address is both churnedTrader and activeLongTail — this checks whether the same mechanism (taker-heavy execution correlating with worse realized edge) shows up in churnedTrader sub-cluster 1, not literal address overlap.
+
+Raw output
+
+Realized PnL per closed fill, churnedTrader sub-cluster x execution type:
+
+subCluster	crossed	medianPnl	n	winRate
+0	False (maker)	8.488	44,012	0.796
+0	True (taker)	3.562	126,769	0.615
+1	False (maker)	0.018	11,112	0.564
+1	True (taker)	-0.266	119,695	0.412
+
+Taker share and sizing scale by sub-cluster:
+
+subCluster	takerShareAllFills	medianNotional	n addresses
+0	0.73	1,755.69	55
+1	1.00	1,344.87	45
+
+Baseline from the Layer 1 activeLongTail check, for comparison: activeCore taker share 0.816 / taker win rate 0.506; activeLongTail taker share 0.922 / taker win rate 0.447.
+
+Explanation
+
+Confirmed on the execution-style axis, not on sizing. Sub-cluster 1's taker win rate (0.412) is worse than activeLongTail's (0.447), which was already the worst taker win rate found anywhere else in the project — and sub-cluster 1's taker share (100%) is higher than activeLongTail's (92.2%). This is the same mechanism identified for activeLongTail — heavy reliance on aggressive execution that performs worse than average when used — showing up independently in a subset of churnedTrader, discovered purely from clustering on trading-style features with no tier label involved.
+
+Sub-cluster 0, by contrast, has a strong taker win rate (0.615, better than every other group measured in this project, activeCore included) alongside a more moderate taker share (0.73) — this looks like traders who were performing well and chose to stop, not traders who were pushed out by weak execution.
+
+Sizing did not replicate: medianNotional is similar between the two sub-clusters (1,755.69 vs 1,344.87), so unlike activeLongTail, the aggressive-position-sizing side of the earlier mechanism isn't clearly present here (this comparison uses absolute notional rather than an equity-normalized ratio, since churnedTrader's accountValue is unreliable per the standing caveat — so this is a weaker test than the activeLongTail sizing check was).
+
+Net read: churnedTrader isn't one population. Roughly 45% of it (sub-cluster 1) matches the activeLongTail underperformance mechanism on execution style — worse-than-average taker outcomes from near-exclusive taker reliance — while the other 55% (sub-cluster 0) looks like a healthier population that disengaged despite good performance, consistent with the disengagement-not-performance conclusion for churnedTrader as a whole, but now with a sub-population caveat: the disengagement conclusion holds most cleanly for sub-cluster 0, while sub-cluster 1 looks like it may have been worn down by consistently poor taker execution before going quiet.
